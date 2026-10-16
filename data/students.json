@@ -1,1 +1,192 @@
-
+{
+ "students": [
+  {
+   "id": "MIA/2024/001",
+   "name": "SAMPLE STUDENT ONE",
+   "programme": "ISLAMIC STUDIES",
+   "department": "DEPARTMENT OF ISLAMIC STUDIES",
+   "faculty": "ARABIC & ISLAMIC SCIENCES",
+   "entryMode": "Direct",
+   "entryYear": "2024/2025",
+   "deferred": "NONE",
+   "disciplinary": "NONE",
+   "extraOutstanding": [],
+   "sessions": [
+    {
+     "session": "2024/2025",
+     "level": 100,
+     "semesters": {
+      "1": [
+       {
+        "code": "ISL 101",
+        "title": "Qur'anic Recitation I",
+        "unit": 2,
+        "status": "C",
+        "score": 71
+       },
+       {
+        "code": "ISL 103",
+        "title": "Tawhid I",
+        "unit": 2,
+        "status": "C",
+        "score": 58
+       },
+       {
+        "code": "ISL 105",
+        "title": "Fiqh I",
+        "unit": 3,
+        "status": "C",
+        "score": 74
+       },
+       {
+        "code": "ARA 101",
+        "title": "Arabic Grammar I",
+        "unit": 3,
+        "status": "C",
+        "score": 48
+       },
+       {
+        "code": "ISL 107",
+        "title": "Seerah I",
+        "unit": 2,
+        "status": "C",
+        "score": 55
+       },
+       {
+        "code": "GNS 101",
+        "title": "Use of English I",
+        "unit": 2,
+        "status": "C",
+        "score": 83
+       }
+      ],
+      "2": [
+       {
+        "code": "ISL 102",
+        "title": "Qur'anic Recitation II",
+        "unit": 2,
+        "status": "C",
+        "score": 55
+       },
+       {
+        "code": "ISL 104",
+        "title": "Tawhid II",
+        "unit": 2,
+        "status": "C",
+        "score": 71
+       },
+       {
+        "code": "ISL 106",
+        "title": "Fiqh II",
+        "unit": 3,
+        "status": "C",
+        "score": 88
+       },
+       {
+        "code": "ARA 102",
+        "title": "Arabic Grammar II",
+        "unit": 3,
+        "status": "C",
+        "score": 48
+       },
+       {
+        "code": "ISL 108",
+        "title": "Seerah II",
+        "unit": 2,
+        "status": "C",
+        "score": 83
+       },
+       {
+        "code": "GNS 102",
+        "title": "Use of English II",
+        "unit": 2,
+        "status": "E",
+        "score": 62
+       }
+      ]
+     }
+    },
+    {
+     "session": "2025/2026",
+     "level": 200,
+     "semesters": {
+      "1": [
+       {
+        "code": "ISL 201",
+        "title": "Tafsir I",
+        "unit": 3,
+        "status": "C",
+        "score": 48
+       },
+       {
+        "code": "ISL 203",
+        "title": "Hadith I",
+        "unit": 3,
+        "status": "C",
+        "score": 55
+       },
+       {
+        "code": "ISL 205",
+        "title": "Usul al-Fiqh I",
+        "unit": 2,
+        "status": "C",
+        "score": 74
+       },
+       {
+        "code": "ARA 201",
+        "title": "Arabic Literature I",
+        "unit": 2,
+        "status": "C",
+        "score": 74
+       },
+       {
+        "code": "ISL 207",
+        "title": "Islamic History I",
+        "unit": 2,
+        "status": "E",
+        "score": 55
+       }
+      ],
+      "2": [
+       {
+        "code": "ISL 202",
+        "title": "Tafsir II",
+        "unit": 3,
+        "status": "C",
+        "score": 62
+       },
+       {
+        "code": "ISL 204",
+        "title": "Hadith II",
+        "unit": 3,
+        "status": "C",
+        "score": 55
+       },
+       {
+        "code": "ISL 206",
+        "title": "Usul al-Fiqh II",
+        "unit": 2,
+        "status": "C",
+        "score": 83
+       },
+       {
+        "code": "ARA 202",
+        "title": "Arabic Literature II",
+        "unit": 2,
+        "status": "C",
+        "score": 74
+       },
+       {
+        "code": "ISL 208",
+        "title": "Islamic History II",
+        "unit": 2,
+        "status": "E",
+        "score": 48
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}
