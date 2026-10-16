@@ -15,38 +15,143 @@
   }
   const find = q => { q = q.trim().toLowerCase(); return students.find(s => s.id.toLowerCase() === q) || null; };
 
-  /* ---------- Public: lookup + profile ---------- */
-  function home(msg) {
-    app.innerHTML = `<section class="hero"><img src="assets/logo.png" alt="">
-      <h1>Student Result Portal</h1><p>Enter your Student ID to view your full academic profile and download your results.</p>
-      <form class="search" id="f"><input id="q" placeholder="Student ID e.g. MIA/2024/001" required autofocus><button>View Result</button></form>
-      ${msg ? `<div class="msg">${esc(msg)}</div>` : ""}</section>`;
-    $("#f").onsubmit = e => { e.preventDefault(); const s = find($("#q").value); s ? (location.hash = "#/s/" + encodeURIComponent(s.id)) : home("No student found with that ID."); };
+  /* ---------- Student portal ---------- */
+  const PW = "mia_student_pw", USER = "mia_user";
+  const pwStore = { get() { try { return JSON.parse(localStorage.getItem(PW)) || {}; } catch { return {}; } }, set(v) { try { localStorage.setItem(PW, JSON.stringify(v)); } catch {} } };
+  const me = () => { try { return sessionStorage.getItem(USER); } catch { return null; } };
+  const setMe = v => { try { v ? sessionStorage.setItem(USER, v) : sessionStorage.removeItem(USER); } catch {} };
+  const isAdmin = () => { try { return sessionStorage.getItem(AUTH) === "1"; } catch { return false; } };
+  async function hash(id, pw) {
+    const enc = new TextEncoder(), key = await crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]);
+    const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode("mia:" + id.toLowerCase()), iterations: 100000, hash: "SHA-256" }, key, 256);
+    return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
-  function semTable(s) {
+  const norm = s => String(s || "").trim().toLowerCase();
+  const logout = e => { e && e.preventDefault(); setMe(null); location.hash = "#/"; route(); };
+  function nav() {
+    $("#nav").innerHTML = (me() ? `<a href="#/me">My Portal</a><a href="#" id="lo">Logout</a>` : `<a href="#/">Home</a>`) + `<a href="#/admin">Admin</a>`;
+    const lo = $("#lo"); if (lo) lo.onclick = logout;
+  }
+
+  /* Landing page: portal link cards */
+  const ICON = { user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>', gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>',
+    bars: '<svg viewBox="0 0 24 24"><rect x="4" y="12" width="4" height="8"/><rect x="10" y="6" width="4" height="14"/><rect x="16" y="9" width="4" height="11"/></svg>',
+    cap: '<svg viewBox="0 0 24 24"><path d="M12 4L1 9l11 5 9-4.1V16h2V9zM5 13.2v3.6c0 1.700 3.100 3.200 7 3.200s7-1.500 7-3.200v-3.600L12 16.500z"/></svg>',
+    folder: '<svg viewBox="0 0 24 24"><path d="M3 5h7l2 2h9v12H3z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>' };
+  function landing() {
+    app.innerHTML = `<section class="banner"><img src="assets/logo.png" alt=""><h1>MIA Results Processing Unit</h1><p>Information links for Students &amp; Administrators</p></section>
+      <div class="pcards"><div class="pcard"><div class="ico">${ICON.user}</div><h3>STUDENT PORTAL</h3><hr><p><a href="#/register">Register</a> | <a href="#/login">Login</a></p></div>
+      <div class="pcard"><div class="ico">${ICON.gear}</div><h3>ADMIN PORTAL</h3><hr><p><a href="#/admin">Login</a></p></div></div>`;
+  }
+
+  /* Login / Register / Reset */
+  function authPage(mode, msg) {
+    const reg = mode === "register", rst = mode === "reset", extra = reg || rst;
+    app.innerHTML = `<div class="authbox"><img src="assets/logo.png" alt="">
+      <h2>${reg ? "Student Registration" : rst ? "Reset Your Password" : "Student Sign In"}</h2><hr>
+      ${mode === "login" ? '<div class="info">Are you a new student? <a class="btn sm" href="#/register">Register here</a></div>' : ""}
+      ${msg ? `<div class="err">${esc(msg)}</div>` : ""}
+      <form id="f"><input id="sid" placeholder="Matriculation / Student ID e.g. MIA/2024/001" autocomplete="username" required>
+      ${extra ? '<input id="yr" placeholder="Year of entry e.g. 2024/2025 (verification)" required>' : ""}
+      <input id="pw" type="password" placeholder="${extra ? "Choose a password (min 6 characters)" : "Password"}" autocomplete="${extra ? "new-password" : "current-password"}" required>
+      ${extra ? '<input id="pw2" type="password" placeholder="Confirm password" autocomplete="new-password" required>' : ""}
+      <button class="wide">${reg ? "Create Account" : rst ? "Reset Password" : "Log In"}</button><a class="btn wide alt" href="#/">HOME</a></form><hr>
+      ${mode === "login" ? '<p class="c">Forgot your password?<br><a href="#/reset">CLICK HERE to Reset Your Password.</a></p>' : `<p class="c"><a href="#/login">Back to Log In</a></p>`}</div>`;
+    $("#f").onsubmit = async e => {
+      e.preventDefault();
+      const st = find($("#sid").value), pw = $("#pw").value, store = pwStore.get();
+      if (!st) return authPage(mode, "No student found with that ID.");
+      if (extra) {
+        if (norm($("#yr").value) !== norm(st.entryYear)) return authPage(mode, "Verification failed: year of entry does not match.");
+        if (pw.length < 6) return authPage(mode, "Password must be at least 6 characters.");
+        if (pw !== $("#pw2").value) return authPage(mode, "Passwords do not match.");
+        if (reg && store[st.id]) return authPage("login", "A password already exists on this device. Please log in, or reset it.");
+        store[st.id] = await hash(st.id, pw); pwStore.set(store);
+      } else if (!store[st.id]) return authPage("register", "No password set on this device yet. Please register to choose one.");
+      else if (store[st.id] !== await hash(st.id, pw)) return authPage(mode, "Wrong password.");
+      setMe(st.id); location.hash = "#/me"; route();
+    };
+  }
+
+  /* Logged-in shell: photo, name, menu */
+  function shell(page, html, st) {
+    const open = true, n = (st.notices || []).length;
+    const a = (h, l, extra = "") => `<a href="#/${h}" class="${page === h ? "on" : ""}">${l}${extra}</a>`;
+    app.innerHTML = `<div class="shell"><aside class="side"><div class="photo">${st.photo ? `<img src="${st.photo}" alt="">` : `<div class="ph">${esc(st.name.charAt(0))}</div>`}</div>
+      <div class="pname">${esc(st.name)}</div><nav class="menu">
+      <button class="mh ${open ? "act" : ""}" id="tg">Academic Profiles <span>▾</span></button>
+      <div class="sub" ${open ? "" : "hidden"} id="sub">${a("current", "Current Result", '<em>New</em>')}${a("profile", "Academic Profiles")}${a("transcript", "Un-Official Transcript", '<em>New</em>')}</div>
+      ${a("notices", "Notifications", `<b class="bd">${n}</b>`)}${a("courses", "Course Profile")}${a("me", "Home")}${a("account", "My Account", '<em>New</em>')}
+      <a href="#" id="lo2">Logout</a></nav></aside><section class="content">${html}</section></div>`;
+    $("#tg").onclick = () => { $("#sub").hidden = !$("#sub").hidden; };
+    $("#lo2").onclick = logout;
+    $("#full") && ($("#full").onclick = () => PortalPDF.full(st));
+    app.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => { const [s, k] = b.dataset.pdf.split("|"); PortalPDF.term(st, s, k); });
+    app.querySelectorAll("[data-full]").forEach(b => b.onclick = () => PortalPDF.full(st));
+  }
+  const title = t => `<h2 class="ptitle">${t}</h2>`;
+  const termLabel = s => `${s.level} Level · ${s.session} · ${s.n === "1" ? "First" : "Second"} Semester`;
+  const pdfBtn = s => `<button class="sm" data-pdf="${esc(s.session)}|${s.n}">⬇ PDF</button>`;
+  function semDetail(s) {
+    return `<div class="scroll"><table><tr><th>Course</th><th>Title</th><th>Unit</th><th>Status</th><th>Score</th><th>Grade</th><th>GP</th><th>Credit Point</th></tr>` +
+      s.rows.map(c => `<tr><td>${esc(c.code)}</td><td class="l">${esc(c.title)}</td><td>${c.unit}</td><td>${esc(c.status)}</td><td>${c.score}</td><td>${c.letter}</td><td>${c.gp}</td><td>${c.cp}</td></tr>`).join("") + `</table></div>
+      <div class="sum">TNU: ${s.tnu} TCP: ${s.tcp} GP: <b>${r2(s.gpa)}</b> CGPA: <b>${r2(s.cgpa)}</b> · CTNUP: ${s.ctnup} · <i>${s.standing}</i></div>`;
+  }
+  function semCompact(s) {
     return `<table><tr><th>Course</th><th>Unit</th><th>Status</th><th>GP</th><th>Credit Point</th></tr>` +
-      s.rows.map(c => `<tr title="${esc(c.title)} - ${c.score} (${c.letter})"><td>${esc(c.code)}</td><td>${c.unit}</td><td>${esc(c.status)}</td><td>${c.gp}</td><td>${c.cp}</td></tr>`).join("") + `</table>
+      s.rows.map(c => `<tr><td>${esc(c.code)}</td><td>${c.unit}</td><td>${esc(c.status)}</td><td>${c.gp}</td><td>${c.cp}</td></tr>`).join("") + `</table>
       <div class="sum">TNU: ${s.tnu} TCP: ${s.tcp} GP: ${r2(s.gpa)} CGPA: ${r2(s.cgpa)}<br>CTNUP: ${s.ctnup} CGPA: ${r2(s.cgpa)} <i>${s.standing}</i></div>`;
   }
-  function profile(id) {
-    const st = find(decodeURIComponent(id)); if (!st) return home("Student not found.");
-    const p = Calc.profile(st);
-    const lv = p.levels.map(l => `<div class="level"><h3><span>${esc(l.session)}</span><span>${l.level} Level</span></h3>` +
-      l.semesters.filter(s => s.rows.length).map(s => `<div class="sem"><h4>${s.n === "1" ? "First" : "Second"} Semester
-        <button class="sm sec" data-pdf="${esc(l.session)}|${s.n}">⬇ PDF</button></h4>${semTable(s)}</div>`).join("") + `</div>`).join("");
-    app.innerHTML = `<div class="card"><div class="pro-head"><div><h2>${esc(st.name)}</h2>
-      <div class="meta"><b>${esc(st.id)}</b> · ${esc(st.programme)}<br>${esc(st.department)} · ${esc(st.faculty)}<br>Mode of Entry: ${esc(st.entryMode)} · Year of Entry: ${esc(st.entryYear)} · Deferred: ${esc(st.deferred || "NONE")}</div></div>
-      <div class="actions"><button id="full">⬇ Download Full Profile (PDF)</button><button class="sec" onclick="print()">Print</button></div></div>
-      <div class="stats"><div class="stat"><b>${r2(p.cgpa)}</b><span>CGPA</span></div><div class="stat"><b>${p.cTNU}</b><span>Units Taken</span></div>
-      <div class="stat"><b>${p.cTNUP}</b><span>Units Passed</span></div><div class="stat"><b>${p.semDone}/${window.PORTAL_CONFIG.totalSemesters}</b><span>Semesters</span></div>
-      <div class="stat"><b>${esc(p.cls)}</b><span>Current Class</span></div></div></div>
-      <div class="levels">${lv || '<div class="card">No results yet.</div>'}</div>
-      <div class="card bottom"><dl><dt>Outstanding Courses</dt><dd>${p.outstanding.join(", ") || "NONE"}</dd>
-      <dt>Disciplinary Status</dt><dd>${esc(st.disciplinary || "NONE")}</dd>
-      <dt>Academic Summary</dt><dd>CTNUP: ${p.cTNUP} · CTCP: ${p.cTCP} · CTNU: ${p.cTNU} · CGPA: ${r2(p.cgpa)} · ${p.standing}<br>
-      ${p.graduating ? '<span class="tag ok">Eligible to Graduate</span>' : '<span class="tag no">Not Graduating</span> ' + p.reasons.join(" | ")}</dd></dl></div>`;
-    $("#full").onclick = () => PortalPDF.full(st);
-    app.querySelectorAll("[data-pdf]").forEach(b => b.onclick = () => { const [s, n] = b.dataset.pdf.split("|"); PortalPDF.term(st, s, n); });
+  const summaryBox = (st, p) => `<div class="card bottom"><dl><dt>Outstanding Courses</dt><dd>${p.outstanding.join(", ") || "NONE"}</dd>
+    <dt>Disciplinary Status</dt><dd>${esc(st.disciplinary || "NONE")}</dd><dt>Academic Summary</dt><dd>CTNUP: ${p.cTNUP} · CTCP: ${p.cTCP} · CTNU: ${p.cTNU} · CGPA: ${r2(p.cgpa)} · ${p.standing}<br>
+    ${p.graduating ? '<span class="tag ok">Eligible to Graduate</span>' : '<span class="tag no">Not Graduating</span> ' + p.reasons.join(" | ")}</dd></dl></div>`;
+  const hasDefer = st => st.deferred && st.deferred.trim().toUpperCase() !== "NONE";
+
+  function studentPage(page) {
+    const st = find(me() || ""); if (!st) { setMe(null); return landing(); }
+    const p = Calc.profile(st), terms = [];
+    p.levels.forEach(l => l.semesters.forEach(s => { if (s.rows.length) terms.push({ ...s, session: l.session, level: l.level }); }));
+    const cur = terms[terms.length - 1], prev = terms.slice(0, -1).reverse();
+    let html = "";
+    if (page === "me") {
+      const card = (img, t, body, btn) => `<div class="acard"><div class="aimg">${img}</div><h4>${t}</h4>${body ? `<p class="meta">${body}</p>` : ""}<div class="abtn">${btn}</div></div>`;
+      html = title("Academic Profile") + `<div class="stats"><div class="stat"><b>${r2(p.cgpa)}</b><span>CGPA</span></div><div class="stat"><b>${p.cTNUP}</b><span>Units Passed</span></div>
+        <div class="stat"><b>${p.semDone}/${window.PORTAL_CONFIG.totalSemesters}</b><span>Semesters</span></div><div class="stat"><b>${esc(p.cls)}</b><span>Class</span></div></div>
+        <div class="acards">` +
+        card(ICON.bars, "Current Semester Result", cur ? esc(termLabel(cur)) : "No result yet", '<a class="btn" href="#/current">View Result</a>') +
+        card(ICON.cap, "All Results (Profile)", "Full academic profile, all levels", '<button data-full>Download Profile</button>') +
+        card(ICON.folder, "Previous Results", `${prev.length} earlier semester(s)`, '<a class="btn" href="#/previous">View Results</a>') +
+        card(ICON.pause, "Deferment", hasDefer(st) ? "Deferred: " + esc(st.deferred) : "No semester deferred", '<a class="btn" href="#/account">View Details</a>') + `</div>`;
+    } else if (page === "current") {
+      html = title("Current Result") + (cur ? `<div class="card"><div class="pro-head"><b>${esc(termLabel(cur))}</b>${pdfBtn(cur)}</div>${semDetail(cur)}</div>` : '<div class="card">No results published yet.</div>');
+    } else if (page === "previous") {
+      html = title("Previous Results") + (prev.length ? prev.map(s => `<details class="card"><summary>${esc(termLabel(s))} <span class="meta">· GP ${r2(s.gpa)} · CGPA ${r2(s.cgpa)}</span></summary>
+        <div class="row">${pdfBtn(s)}</div>${semDetail(s)}</details>`).join("") : '<div class="card">No previous results.</div>');
+    } else if (page === "profile") {
+      html = title("Academic Profile") + `<div class="card"><div class="pro-head"><div class="meta"><b>${esc(st.name)}</b> · ${esc(st.id)}<br>${esc(st.programme)}</div><button data-full>⬇ Download Profile (PDF)</button></div></div>
+        <div class="levels">` + p.levels.map(l => `<div class="level"><h3><span>${esc(l.session)}</span><span>${l.level} Level</span></h3>` + l.semesters.filter(s => s.rows.length).map(s =>
+        `<div class="sem"><h4>${s.n === "1" ? "First" : "Second"} Semester</h4>${semCompact(s)}</div>`).join("") + `</div>`).join("") + `</div>` + summaryBox(st, p);
+    } else if (page === "transcript") {
+      html = title("Un-Official Transcript") + `<div class="card"><div class="pro-head"><span class="meta">Unofficial copy for personal reference. Not valid for external use.</span><button data-full>⬇ Download (PDF)</button></div></div>` +
+        terms.map(s => `<div class="card"><h3 class="sec-t">${esc(termLabel(s))}</h3>${semDetail(s)}</div>`).join("") + summaryBox(st, p);
+    } else if (page === "notices") {
+      const n = st.notices || []; html = title("Notifications") + (n.length ? n.map(t => `<div class="card">${esc(t)}</div>`).join("") : '<div class="card">You have no notifications.</div>');
+    } else if (page === "courses") {
+      html = title("Course Profile") + (cur ? `<div class="card"><h3 class="sec-t">${esc(termLabel(cur))}</h3><div class="scroll"><table><tr><th>Course</th><th>Title</th><th>Unit</th><th>Status</th></tr>` +
+        cur.rows.map(c => `<tr><td>${esc(c.code)}</td><td class="l">${esc(c.title)}</td><td>${c.unit}</td><td>${esc(c.status)}</td></tr>`).join("") + `</table></div></div>` : '<div class="card">No courses yet.</div>') +
+        `<div class="card"><b>Outstanding courses:</b> ${p.outstanding.join(", ") || "NONE"}</div>`;
+    } else if (page === "account") {
+      html = title("My Account") + `<div class="card bottom"><dl><dt>Name</dt><dd>${esc(st.name)}</dd><dt>Student ID</dt><dd>${esc(st.id)}</dd><dt>Discipline</dt><dd>${esc(st.programme)}</dd>
+        <dt>Department</dt><dd>${esc(st.department)}</dd><dt>Faculty</dt><dd>${esc(st.faculty)}</dd><dt>Mode of Entry</dt><dd>${esc(st.entryMode)}</dd><dt>Year of Entry</dt><dd>${esc(st.entryYear)}</dd>
+        <dt>Deferment</dt><dd>${hasDefer(st) ? `<span class="tag no">Deferred</span> ${esc(st.deferred)}` : '<span class="tag ok">No deferment</span>'}</dd><dt>Disciplinary Status</dt><dd>${esc(st.disciplinary || "NONE")}</dd></dl></div>
+        <div class="card"><h3 class="sec-t">Change Password</h3><form id="cp" class="auth2"><input id="op" type="password" placeholder="Current password" required><input id="np" type="password" placeholder="New password (min 6)" required minlength="6">
+        <button>Update Password</button><div id="cpm" class="meta"></div></form></div>`;
+    } else return location.hash = "#/me";
+    shell(page, html, st);
+    const cp = $("#cp"); if (cp) cp.onsubmit = async e => { e.preventDefault(); const store = pwStore.get();
+      if (store[st.id] !== await hash(st.id, $("#op").value)) return $("#cpm").textContent = "Current password is wrong.";
+      store[st.id] = await hash(st.id, $("#np").value); pwStore.set(store); cp.reset(); $("#cpm").textContent = "Password updated."; };
   }
 
   /* ---------- Admin ---------- */
@@ -89,8 +194,10 @@
         `</table></div><button class="sm sec" data-addc="${si}|${n}">＋ Add course</button>`; }).join("") + `</div>`).join("");
     return `<div class="card"><h3 style="margin-top:0">${sel === null ? "New student" : "Edit student"}</h3><div class="form">
       ${f("id", "Student ID")}${f("name", "Full name")}${f("programme", "Discipline / Programme")}${f("department", "Department")}${f("faculty", "Faculty")}
-      ${f("entryMode", "Mode of entry")}${f("entryYear", "Year of entry (e.g. 2024/2025)")}${f("deferred", "Semesters deferred")}${f("disciplinary", "Disciplinary status")}
-      <label>Extra outstanding courses (comma separated)<input data-k="extra" value="${esc((draft.extraOutstanding || []).join(", "))}"></label></div></div>
+      ${f("entryMode", "Mode of entry")}${f("entryYear", "Year of entry (e.g. 2024/2025)")}${f("deferred", "Deferment (NONE, or e.g. 2025/2026 First Semester)")}${f("disciplinary", "Disciplinary status")}
+      <label>Extra outstanding courses (comma separated)<input data-k="extra" value="${esc((draft.extraOutstanding || []).join(", "))}"></label>
+      <label>Passport photo<input type="file" accept="image/*" id="photo">${draft.photo ? `<img src="${draft.photo}" alt="" style="width:60px;margin-top:4px;border-radius:6px">` : ""}</label>
+      <label style="grid-column:1/-1">Notifications for this student (one per line)<textarea data-k="notices" rows="3">${esc((draft.notices || []).join("\n"))}</textarea></label></div></div>
       ${ses}<div class="card"><div class="row" style="margin:0"><input id="nses" placeholder="Session e.g. 2025/2026"><select id="nlv"><option>100</option><option>200</option><option>300</option><option>400</option></select>
       <button class="sec" id="ases">＋ Add session</button></div></div>
       <div class="row"><button id="save">Save student</button>${sel !== null ? '<button class="danger" id="del">Delete student</button>' : ""}</div>`;
@@ -98,10 +205,10 @@
   function bindEditor() {
     const ed = $("#ed");
     ed.addEventListener("input", e => { const t = e.target;
-      if (t.dataset.k) { if (t.dataset.k === "extra") draft.extraOutstanding = t.value.split(",").map(x => x.trim()).filter(Boolean); else draft[t.dataset.k] = t.value; }
+      if (t.dataset.k) { if (t.dataset.k === "notices") draft.notices = t.value.split("\n").map(x => x.trim()).filter(Boolean); else if (t.dataset.k === "extra") draft.extraOutstanding = t.value.split(",").map(x => x.trim()).filter(Boolean); else draft[t.dataset.k] = t.value; }
       else if (t.dataset.c) { const [si, n, ci, k] = t.dataset.c.split("|"); draft.sessions[si].semesters[n][ci][k] = t.type === "number" ? +t.value : t.value; }
     });
-    ed.addEventListener("change", e => { if (e.target.dataset.c) rerender(); });
+    ed.addEventListener("change", e => { if (e.target.id === "photo" && e.target.files[0]) return readPhoto(e.target.files[0]); if (e.target.dataset.c) rerender(); });
     ed.addEventListener("click", e => { const d = e.target.dataset; if (!d) return;
       if (d.addc) { const [si, n] = d.addc.split("|"); draft.sessions[si].semesters[n].push({ code: "", title: "", unit: 2, status: "C", score: 0 }); rerender(); }
       if (d.delc) { const [si, n, ci] = d.delc.split("|"); draft.sessions[si].semesters[n].splice(ci, 1); rerender(); }
@@ -110,6 +217,13 @@
       if (e.target.id === "save") save();
       if (e.target.id === "del" && confirm("Delete this student permanently?")) { students.splice(sel, 1); persist(); draft = null; sel = null; admin(); }
     });
+  }
+  function readPhoto(file) {
+    const img = new Image(); img.onload = () => {
+      const W = 240, H = 300, c = document.createElement("canvas"); c.width = W; c.height = H;
+      const k = Math.max(W / img.width, H / img.height), w = img.width * k, h = img.height * k;
+      c.getContext("2d").drawImage(img, (W - w) / 2, (H - h) / 2, w, h); draft.photo = c.toDataURL("image/jpeg", 0.8); rerender();
+    }; img.src = URL.createObjectURL(file);
   }
   function rerender() { $("#ed").innerHTML = editor(); }
   function save() {
@@ -123,8 +237,13 @@
 
   /* ---------- Router ---------- */
   function route() {
-    const h = location.hash.replace(/^#\/?/, ""); scrollTo(0, 0);
-    if (h.startsWith("s/")) profile(h.slice(2)); else if (h === "admin") admin(); else home();
+    const h = location.hash.replace(/^#\/?/, ""); scrollTo(0, 0); nav();
+    const user = me() && find(me());
+    if (h === "admin") return admin();
+    if (["login", "register", "reset"].includes(h)) return user ? (location.hash = "#/me") : authPage(h);
+    if (h === "") return user ? (location.hash = "#/me") : landing();
+    if (h === "previous" || ["me", "current", "profile", "transcript", "notices", "courses", "account"].includes(h)) return user ? studentPage(h) : authPage("login", "Please log in.");
+    landing();
   }
   addEventListener("hashchange", route);
   load().then(route);
