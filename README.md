@@ -18,3 +18,11 @@ Blue-themed result portal. Students look up their ID to see their full profile (
 GitHub Pages is static hosting, so there is no server database. Admin edits live in that browser until you export and commit. The admin passcode and all data in `students.json` are visible to anyone who views the site's source, so don't treat this as confidential storage. For private per-student access, add a backend (e.g. Firebase/Supabase) later.
 
 `config.js` holds the grading scale, units required to graduate, and degree classes. The sample student is fictional.
+
+## Student login
+Students open the site, tap **First time? Create your password**, then choose a password for their Student ID. Afterwards they log in with ID + password to see their dashboard: profile, current result, previous results, deferment, and PDF downloads.
+
+Passwords are stored (hashed) in the browser of the device where they were created, so a student must set one on each device. This is a convenience gate, not strong security: the results file itself is public. A real shared login needs a backend (Firebase/Supabase).
+
+## Layout
+Home (portal links) → Student Sign In / Register / Reset password → dashboard with photo, name and menu: Academic Profiles (Current Result, Academic Profiles, Un-Official Transcript), Notifications, Course Profile, My Account. Admin can upload each student's passport photo and add notifications.

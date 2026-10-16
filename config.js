@@ -4,7 +4,7 @@ window.PORTAL_CONFIG = {
   motto: "Know Me Before You Worship Me",
   est: "EST. 2024",
   // Client-side passcode for the admin page. NOT real security - see README.
-  adminPasscode: "9862",
+  adminPasscode: "change-me",
   totalSemesters: 8,        // semesters needed to graduate
   requiredUnits: 120,       // total units passed required to graduate
   passMark: 40,
