@@ -9,7 +9,9 @@
     set(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch {} },
     clear() { try { localStorage.removeItem(KEY); } catch {} },
   };
+  let role = null; // cloud mode only: "admin" | "student" | null
   async function load() {
+    if (Cloud.enabled()) { try { const r = await Cloud.session(); role = r.role; students = r.students; } catch (e) { role = null; students = []; } return; }
     try { students = (await (await fetch("data/students.json", { cache: "no-store" })).json()).students || []; } catch { students = []; }
     const d = store.get(); if (d && d.students) { students = d.students; usingDraft = true; }
   }
@@ -18,16 +20,16 @@
   /* ---------- Student portal ---------- */
   const PW = "mia_student_pw", USER = "mia_user";
   const pwStore = { get() { try { return JSON.parse(localStorage.getItem(PW)) || {}; } catch { return {}; } }, set(v) { try { localStorage.setItem(PW, JSON.stringify(v)); } catch {} } };
-  const me = () => { try { return sessionStorage.getItem(USER); } catch { return null; } };
+  const me = () => { if (Cloud.enabled()) return role === "student" && students[0] ? students[0].id : null; try { return sessionStorage.getItem(USER); } catch { return null; } };
   const setMe = v => { try { v ? sessionStorage.setItem(USER, v) : sessionStorage.removeItem(USER); } catch {} };
-  const isAdmin = () => { try { return sessionStorage.getItem(AUTH) === "1"; } catch { return false; } };
+  const isAdmin = () => { if (Cloud.enabled()) return role === "admin"; try { return sessionStorage.getItem(AUTH) === "1"; } catch { return false; } };
   async function hash(id, pw) {
     const enc = new TextEncoder(), key = await crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]);
     const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: enc.encode("mia:" + id.toLowerCase()), iterations: 100000, hash: "SHA-256" }, key, 256);
     return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
   }
   const norm = s => String(s || "").trim().toLowerCase();
-  const logout = e => { e && e.preventDefault(); setMe(null); location.hash = "#/"; route(); };
+  const logout = async e => { e && e.preventDefault(); if (Cloud.enabled()) { await Cloud.logout(); role = null; students = []; } setMe(null); location.hash = "#/"; route(); };
   function nav() {
     $("#nav").innerHTML = (me() ? `<a href="#/me">My Portal</a><a href="#" id="lo">Logout</a>` : `<a href="#/">Home</a>`) + `<a href="#/admin">Admin</a>`;
     const lo = $("#lo"); if (lo) lo.onclick = logout;
@@ -53,6 +55,7 @@
       ${mode === "login" ? '<div class="info">Are you a new student? <a class="btn sm" href="#/register">Register here</a></div>' : ""}
       ${msg ? `<div class="err">${esc(msg)}</div>` : ""}
       <form id="f"><input id="sid" placeholder="Matriculation / Student ID e.g. MIA/2024/001" autocomplete="username" required>
+      ${reg && Cloud.enabled() ? '<input id="nm" placeholder="Full name (only needed if you are new)"><input id="pg" placeholder="Programme / Discipline (optional)">' : ""}
       ${extra ? '<input id="yr" placeholder="Year of entry e.g. 2024/2025 (verification)" required>' : ""}
       <input id="pw" type="password" placeholder="${extra ? "Choose a password (min 6 characters)" : "Password"}" autocomplete="${extra ? "new-password" : "current-password"}" required>
       ${extra ? '<input id="pw2" type="password" placeholder="Confirm password" autocomplete="new-password" required>' : ""}
@@ -60,6 +63,19 @@
       ${mode === "login" ? '<p class="c">Forgot your password?<br><a href="#/reset">CLICK HERE to Reset Your Password.</a></p>' : `<p class="c"><a href="#/login">Back to Log In</a></p>`}</div>`;
     $("#f").onsubmit = async e => {
       e.preventDefault();
+      if (Cloud.enabled()) {
+        const pw = $("#pw").value;
+        try {
+          let r;
+          if (reg) {
+            if (pw.length < 6) return authPage(mode, "Password must be at least 6 characters.");
+            if (pw !== $("#pw2").value) return authPage(mode, "Passwords do not match.");
+            r = await Cloud.register({ id: $("#sid").value, name: $("#nm").value || $("#sid").value, programme: $("#pg").value, entryYear: $("#yr").value }, pw);
+          } else r = await Cloud.studentLogin($("#sid").value, pw);
+          role = r.role; students = r.students; location.hash = "#/me"; route();
+        } catch (err) { authPage(mode, Cloud.msg(err)); }
+        return;
+      }
       const st = find($("#sid").value), pw = $("#pw").value, store = pwStore.get();
       if (!st) return authPage(mode, "No student found with that ID.");
       if (extra) {
@@ -150,6 +166,7 @@
     } else return location.hash = "#/me";
     shell(page, html, st);
     const cp = $("#cp"); if (cp) cp.onsubmit = async e => { e.preventDefault(); const store = pwStore.get();
+      if (Cloud.enabled()) { try { await Cloud.changePassword($("#op").value, $("#np").value); cp.reset(); $("#cpm").textContent = "Password updated."; } catch (er) { $("#cpm").textContent = Cloud.msg(er); } return; }
       if (store[st.id] !== await hash(st.id, $("#op").value)) return $("#cpm").textContent = "Current password is wrong.";
       store[st.id] = await hash(st.id, $("#np").value); pwStore.set(store); cp.reset(); $("#cpm").textContent = "Password updated."; };
   }
@@ -160,7 +177,12 @@
   const blankStudent = () => ({ id: "", name: "", programme: "ISLAMIC STUDIES", department: "DEPARTMENT OF ISLAMIC STUDIES", faculty: "ARABIC & ISLAMIC SCIENCES",
     entryMode: "Direct", entryYear: "", deferred: "NONE", disciplinary: "NONE", extraOutstanding: [], sessions: [] });
   function admin() {
-    let ok = false; try { ok = sessionStorage.getItem(AUTH) === "1"; } catch {}
+    const ok = isAdmin(), cloud = Cloud.enabled();
+    if (!ok && cloud) {
+      app.innerHTML = `<div class="card" style="max-width:420px;margin:40px auto"><h2>Admin Login</h2><form id="lf" class="auth2"><input id="em" type="email" placeholder="Admin email" required><input id="pw" type="password" placeholder="Password" required><button>Enter</button></form><div id="le" class="meta"></div></div>`;
+      $("#lf").onsubmit = async e => { e.preventDefault(); try { const r = await Cloud.adminLogin($("#em").value, $("#pw").value); role = r.role; students = r.students; admin(); } catch (er) { $("#le").textContent = Cloud.msg(er); } };
+      return;
+    }
     if (!ok) {
       app.innerHTML = `<div class="card" style="max-width:420px;margin:40px auto"><h2>Admin Login</h2><form id="lf" class="row"><input id="pw" type="password" placeholder="Passcode" required><button>Enter</button></form><div id="le" class="meta"></div></div>`;
       $("#lf").onsubmit = e => { e.preventDefault(); if ($("#pw").value === PORTAL_CONFIG.adminPasscode) { try { sessionStorage.setItem(AUTH, "1"); } catch {} admin(); } else $("#le").textContent = "Wrong passcode."; };
@@ -168,16 +190,19 @@
     }
     const list = students.map((s, i) => `<button class="${i === sel ? "" : "sec"}" data-i="${i}">${esc(s.name || "(unnamed)")}<br><small>${esc(s.id)}</small></button>`).join("");
     app.innerHTML = `<div class="admin-grid"><aside class="card list"><button id="new">＋ New Student</button>${list}
-      <hr><button class="sec sm" id="exp">Export data.json</button><button class="sec sm" id="imp">Import data.json</button>
-      <button class="sec sm" id="rst">Discard browser edits</button><input type="file" id="file" accept=".json" hidden></aside>
+      <hr><button class="sec sm" id="exp">Export backup (JSON)</button>${cloud ? "" : '<button class="sec sm" id="imp">Import data.json</button><button class="sec sm" id="rst">Discard browser edits</button>'}<input type="file" id="file" accept=".json" hidden>
+      <button class="sec sm" id="alo">Admin logout</button></aside>
       <section id="ed">${draft ? editor() : '<div class="card">Select a student or add a new one.</div>'}</section></div>
-      <div class="note">Edits are saved in <b>this browser</b>${usingDraft ? " (currently using your edited copy)" : ""}. To publish for everyone: <b>Export data.json</b> → replace <code>data/students.json</code> in the GitHub repo → commit.</div>`;
+      <div class="note">${cloud ? "Online mode: results you save here appear on students' devices straight away." : ""}${cloud ? "" : `Edits are saved in <b>this browser</b>${usingDraft ? " (currently using your edited copy)" : ""}. To publish for everyone: <b>Export data.json</b> → replace <code>data/students.json</code> in the GitHub repo → commit.`}</div>`;
     app.querySelectorAll("[data-i]").forEach(b => b.onclick = () => { sel = +b.dataset.i; draft = JSON.parse(JSON.stringify(students[sel])); admin(); });
     $("#new").onclick = () => { sel = null; draft = blankStudent(); admin(); };
     $("#exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ students }, null, 1)], { type: "application/json" })); a.download = "students.json"; a.click(); };
-    $("#imp").onclick = () => $("#file").click();
-    $("#file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); students = d.students; persist(); draft = null; sel = null; admin(); } catch { alert("Invalid JSON file."); } };
-    $("#rst").onclick = () => { if (confirm("Discard all edits made in this browser and reload the published data?")) { store.clear(); usingDraft = false; load().then(() => { draft = null; sel = null; admin(); }); } };
+    $("#alo").onclick = async () => { if (cloud) { await Cloud.logout(); role = null; students = []; } else { try { sessionStorage.removeItem(AUTH); } catch {} } draft = null; sel = null; admin(); };
+    if (!cloud) {
+      $("#imp").onclick = () => $("#file").click();
+      $("#file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); students = d.students; persist(); draft = null; sel = null; admin(); } catch { alert("Invalid JSON file."); } };
+      $("#rst").onclick = () => { if (confirm("Discard all edits made in this browser and reload the published data?")) { store.clear(); usingDraft = false; load().then(() => { draft = null; sel = null; admin(); }); } };
+    }
     if (draft) bindEditor();
   }
   function editor() {
@@ -200,7 +225,7 @@
       <label style="grid-column:1/-1">Notifications for this student (one per line)<textarea data-k="notices" rows="3">${esc((draft.notices || []).join("\n"))}</textarea></label></div></div>
       ${ses}<div class="card"><div class="row" style="margin:0"><input id="nses" placeholder="Session e.g. 2025/2026"><select id="nlv"><option>100</option><option>200</option><option>300</option><option>400</option></select>
       <button class="sec" id="ases">＋ Add session</button></div></div>
-      <div class="row"><button id="save">Save student</button>${sel !== null ? '<button class="danger" id="del">Delete student</button>' : ""}</div>`;
+      <div class="row"><button id="save">Save student</button>${sel !== null ? '<button class="danger" id="del">Delete student</button>' : ""}${sel !== null && Cloud.enabled() ? '<button class="sec" id="rc">Reset registration</button>' : ""}</div>`;
   }
   function bindEditor() {
     const ed = $("#ed");
@@ -215,7 +240,8 @@
       if (d.delses) { if (confirm("Remove this session and its results?")) { draft.sessions.splice(d.delses, 1); rerender(); } }
       if (e.target.id === "ases") { const s = $("#nses").value.trim(); if (!s) return alert("Enter the session."); draft.sessions.push({ session: s, level: +$("#nlv").value, semesters: { 1: [], 2: [] } }); rerender(); }
       if (e.target.id === "save") save();
-      if (e.target.id === "del" && confirm("Delete this student permanently?")) { students.splice(sel, 1); persist(); draft = null; sel = null; admin(); }
+      if (e.target.id === "rc" && confirm("Allow this student to register again? (Delete their old login in Firebase → Authentication first if they forgot the password.)")) Cloud.resetClaim(students[sel].id).then(() => alert("Registration reset.")).catch(er => alert(Cloud.msg(er)));
+      if (e.target.id === "del" && confirm("Delete this student permanently?")) { const gone = students.splice(sel, 1)[0]; (Cloud.enabled() ? Cloud.remove(gone.id) : Promise.resolve(persist())).then(() => { draft = null; sel = null; admin(); }).catch(er => alert(Cloud.msg(er))); }
     });
   }
   function readPhoto(file) {
@@ -230,9 +256,11 @@
     if (!draft.id.trim() || !draft.name.trim()) return alert("Student ID and name are required.");
     const dup = students.findIndex((s, i) => s.id.toLowerCase() === draft.id.trim().toLowerCase() && i !== sel);
     if (dup >= 0) return alert("Another student already has that ID.");
+    const oldId = sel === null ? null : students[sel].id;
     draft.id = draft.id.trim(); draft.name = draft.name.trim().toUpperCase();
     if (sel === null) { students.push(draft); sel = students.length - 1; } else students[sel] = draft;
-    persist(); draft = JSON.parse(JSON.stringify(students[sel])); admin();
+    const done = () => { draft = JSON.parse(JSON.stringify(students[sel])); admin(); };
+    if (Cloud.enabled()) Cloud.save(students[sel], oldId).then(done).catch(er => alert("Save failed: " + Cloud.msg(er))); else { persist(); done(); }
   }
 
   /* ---------- Router ---------- */
@@ -240,6 +268,7 @@
     const h = location.hash.replace(/^#\/?/, ""); scrollTo(0, 0); nav();
     const user = me() && find(me());
     if (h === "admin") return admin();
+    if (h === "reset" && Cloud.enabled()) { app.innerHTML = '<div class="authbox"><h2>Forgot your password?</h2><hr><p>Please contact the academy admin. They will reset your registration so you can register again with a new password.</p><a class="btn" href="#/login">Back to Log In</a></div>'; return; }
     if (["login", "register", "reset"].includes(h)) return user ? (location.hash = "#/me") : authPage(h);
     if (h === "") return user ? (location.hash = "#/me") : landing();
     if (h === "previous" || ["me", "current", "profile", "transcript", "notices", "courses", "account"].includes(h)) return user ? studentPage(h) : authPage("login", "Please log in.");
