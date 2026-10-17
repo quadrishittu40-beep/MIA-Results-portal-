@@ -26,3 +26,6 @@ Passwords are stored (hashed) in the browser of the device where they were creat
 
 ## Layout
 Home (portal links) → Student Sign In / Register / Reset password → dashboard with photo, name and menu: Academic Profiles (Current Result, Academic Profiles, Un-Official Transcript), Notifications, Course Profile, My Account. Admin can upload each student's passport photo and add notifications.
+
+## Shared online mode
+Without setup the site runs per-device (see limits above). Follow **FIREBASE_SETUP.md** to turn on shared mode: student self-registration, login on any device, and admin results that appear for students immediately.

@@ -5,6 +5,10 @@ window.PORTAL_CONFIG = {
   est: "EST. 2024",
   // Client-side passcode for the admin page. NOT real security - see README.
   adminPasscode: "change-me",
+  // ---- Shared online mode (optional). Leave apiKey empty to run without a backend. See FIREBASE_SETUP.md ----
+  firebase: { apiKey: "", authDomain: "", projectId: "", appId: "" },
+  adminEmail: "",           // the admin's Firebase login email
+  defaults: { programme: "ISLAMIC STUDIES", department: "DEPARTMENT OF ISLAMIC STUDIES", faculty: "ARABIC & ISLAMIC SCIENCES", entryMode: "UME" },
   totalSemesters: 8,        // semesters needed to graduate
   requiredUnits: 120,       // total units passed required to graduate
   passMark: 40,
