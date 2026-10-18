@@ -173,6 +173,40 @@
 
   /* ---------- Admin ---------- */
   let sel = null, draft = null;
+  /* ---- Backups: downloadable file + automatic snapshots (last 5) kept in this browser ---- */
+  const BK = "mia_snapshots", LB = "mia_last_backup";
+  const snaps = {
+    get() { try { return JSON.parse(localStorage.getItem(BK)) || []; } catch { return []; } },
+    add() { try { const a = snaps.get(); a.unshift({ t: Date.now(), students: JSON.parse(JSON.stringify(students)) }); localStorage.setItem(BK, JSON.stringify(a.slice(0, 5))); } catch {} },
+  };
+  const lastBackup = () => { try { return +localStorage.getItem(LB) || 0; } catch { return 0; } };
+  function downloadBackup() {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ students, savedAt: new Date().toISOString() }, null, 1)], { type: "application/json" }));
+    a.download = "mia-students-backup-" + new Date().toISOString().slice(0, 10) + ".json"; a.click();
+    try { localStorage.setItem(LB, String(Date.now())); } catch {}
+  }
+  /* Online backup (shared mode only) */
+  let ob = null, obBusy = "", obAuto = false;
+  const obHtml = () => `<b>Online backup</b><button class="sec sm" id="obnow">☁ Back up now</button>
+    ${ob && ob.length ? `<select id="obsel">${ob.map((x, i) => `<option value="${i}">${new Date(x.t).toLocaleString()} (${x.count})</option>`).join("")}</select><button class="sec sm" id="obres">Restore this online backup</button>` : '<div class="meta">No online backups yet.</div>'}
+    <div class="meta">${esc(obBusy)}</div>`;
+  function obBind() {
+    const box = $("#obk"); if (!box) return; box.innerHTML = obHtml();
+    const set = m => { obBusy = m; const b = $("#obk"); if (b) obBind(); };
+    $("#obnow").onclick = async () => { set("Backing up…"); try { ob = await Cloud.backupCreate(students); set("Backup saved " + new Date().toLocaleTimeString()); } catch (e) { set("Backup failed: " + Cloud.msg(e)); } };
+    const rb = $("#obres"); if (rb) rb.onclick = async () => { const b = ob[+$("#obsel").value]; if (!b || !confirm("Restore " + b.count + " students from " + new Date(b.t).toLocaleString() + "? Current data is backed up first.")) return;
+      set("Restoring…"); try { ob = await Cloud.backupCreate(students); await applyStudents(await Cloud.backupLoad(ob.find(x => x.id === String(b.id)) || b)); draft = null; sel = null; admin(); } catch (e) { set("Restore failed: " + Cloud.msg(e)); } };
+  }
+  async function obInit() {
+    if (!Cloud.enabled() || ob !== null) return; ob = [];
+    try { ob = await Cloud.backupList(); if (students.length && (!ob[0] || Date.now() - ob[0].t > 864e5) && !obAuto) { obAuto = true; obBusy = "Daily auto-backup…"; obBind(); ob = await Cloud.backupCreate(students); obBusy = "Auto-backup saved."; } } catch (e) { obBusy = "Online backup unavailable: " + Cloud.msg(e); }
+    obBind();
+  }
+  async function applyStudents(list) {
+    if (!Array.isArray(list)) throw new Error("bad");
+    snaps.add(); students = list;
+    if (Cloud.enabled()) await Promise.all(students.map(x => Cloud.save(x))); else persist();
+  }
   function persist() { store.set({ students }); usingDraft = true; }
   const blankStudent = () => ({ id: "", name: "", programme: "ISLAMIC STUDIES", department: "DEPARTMENT OF ISLAMIC STUDIES", faculty: "ARABIC & ISLAMIC SCIENCES",
     entryMode: "Direct", entryYear: "", deferred: "NONE", disciplinary: "NONE", extraOutstanding: [], sessions: [] });
@@ -190,17 +224,23 @@
     }
     const list = students.map((s, i) => `<button class="${i === sel ? "" : "sec"}" data-i="${i}">${esc(s.name || "(unnamed)")}<br><small>${esc(s.id)}</small></button>`).join("");
     app.innerHTML = `<div class="admin-grid"><aside class="card list"><button id="new">＋ New Student</button>${list}
-      <hr><button class="sec sm" id="exp">Export backup (JSON)</button>${cloud ? "" : '<button class="sec sm" id="imp">Import data.json</button><button class="sec sm" id="rst">Discard browser edits</button>'}<input type="file" id="file" accept=".json" hidden>
+      <hr><b>Backup</b><button class="sec sm" id="exp">⬇ Download backup</button><button class="sec sm" id="imp">Restore from backup file</button>
+      ${snaps.get().length ? `<select id="snsel">${snaps.get().map((x, i) => `<option value="${i}">${new Date(x.t).toLocaleString()} (${x.students.length} students)</option>`).join("")}</select><button class="sec sm" id="snbtn">Restore this snapshot</button>` : ""}
+      ${cloud ? "" : '<button class="sec sm" id="rst">Discard browser edits</button>'}<input type="file" id="file" accept=".json" hidden>
+      ${cloud ? '<div id="obk"></div>' : ""}
       <button class="sec sm" id="alo">Admin logout</button></aside>
       <section id="ed">${draft ? editor() : '<div class="card">Select a student or add a new one.</div>'}</section></div>
+      ${students.length && Date.now() - lastBackup() > 7 * 864e5 ? '<div class="note warn">⚠ No backup downloaded in the last 7 days. Tap <b>Download backup</b> and keep the file safe (e.g. WhatsApp it to yourself or save to Google Drive).</div>' : ""}
       <div class="note">${cloud ? "Online mode: results you save here appear on students' devices straight away." : ""}${cloud ? "" : `Edits are saved in <b>this browser</b>${usingDraft ? " (currently using your edited copy)" : ""}. To publish for everyone: <b>Export data.json</b> → replace <code>data/students.json</code> in the GitHub repo → commit.`}</div>`;
     app.querySelectorAll("[data-i]").forEach(b => b.onclick = () => { sel = +b.dataset.i; draft = JSON.parse(JSON.stringify(students[sel])); admin(); });
     $("#new").onclick = () => { sel = null; draft = blankStudent(); admin(); };
-    $("#exp").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ students }, null, 1)], { type: "application/json" })); a.download = "students.json"; a.click(); };
+    $("#exp").onclick = () => { downloadBackup(); admin(); };
+    $("#imp").onclick = () => $("#file").click();
+    $("#file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); if (!confirm("Restore " + d.students.length + " students from this file? A snapshot of the current data is saved first.")) return; await applyStudents(d.students); draft = null; sel = null; admin(); } catch { alert("Could not restore: invalid backup file or save failed."); } };
+    const sb = $("#snbtn"); if (sb) sb.onclick = async () => { const x = snaps.get()[+$("#snsel").value]; if (x && confirm("Restore this snapshot?")) { try { await applyStudents(x.students); draft = null; sel = null; admin(); } catch { alert("Restore failed."); } } };
+    if (cloud) { obBind(); obInit(); }
     $("#alo").onclick = async () => { if (cloud) { await Cloud.logout(); role = null; students = []; } else { try { sessionStorage.removeItem(AUTH); } catch {} } draft = null; sel = null; admin(); };
     if (!cloud) {
-      $("#imp").onclick = () => $("#file").click();
-      $("#file").onchange = async e => { try { const d = JSON.parse(await e.target.files[0].text()); students = d.students; persist(); draft = null; sel = null; admin(); } catch { alert("Invalid JSON file."); } };
       $("#rst").onclick = () => { if (confirm("Discard all edits made in this browser and reload the published data?")) { store.clear(); usingDraft = false; load().then(() => { draft = null; sel = null; admin(); }); } };
     }
     if (draft) bindEditor();
@@ -241,7 +281,7 @@
       if (e.target.id === "ases") { const s = $("#nses").value.trim(); if (!s) return alert("Enter the session."); draft.sessions.push({ session: s, level: +$("#nlv").value, semesters: { 1: [], 2: [] } }); rerender(); }
       if (e.target.id === "save") save();
       if (e.target.id === "rc" && confirm("Allow this student to register again? (Delete their old login in Firebase → Authentication first if they forgot the password.)")) Cloud.resetClaim(students[sel].id).then(() => alert("Registration reset.")).catch(er => alert(Cloud.msg(er)));
-      if (e.target.id === "del" && confirm("Delete this student permanently?")) { const gone = students.splice(sel, 1)[0]; (Cloud.enabled() ? Cloud.remove(gone.id) : Promise.resolve(persist())).then(() => { draft = null; sel = null; admin(); }).catch(er => alert(Cloud.msg(er))); }
+      if (e.target.id === "del" && confirm("Delete this student permanently?")) { snaps.add(); const gone = students.splice(sel, 1)[0]; (Cloud.enabled() ? Cloud.remove(gone.id) : Promise.resolve(persist())).then(() => { draft = null; sel = null; admin(); }).catch(er => alert(Cloud.msg(er))); }
     });
   }
   function readPhoto(file) {
@@ -256,6 +296,7 @@
     if (!draft.id.trim() || !draft.name.trim()) return alert("Student ID and name are required.");
     const dup = students.findIndex((s, i) => s.id.toLowerCase() === draft.id.trim().toLowerCase() && i !== sel);
     if (dup >= 0) return alert("Another student already has that ID.");
+    snaps.add();
     const oldId = sel === null ? null : students[sel].id;
     draft.id = draft.id.trim(); draft.name = draft.name.trim().toUpperCase();
     if (sel === null) { students.push(draft); sel = students.length - 1; } else students[sel] = draft;

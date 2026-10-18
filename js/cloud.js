@@ -64,6 +64,29 @@ window.Cloud = (() => {
     await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, oldPw));
     await u.updatePassword(newPw);
   }
+  /* Online backups: whole student list stored in Firestore (admin-only), split into chunks to stay under the 1MB document limit. Keeps the newest 10. */
+  const CH = 700000, KEEP = 10;
+  async function backupCreate(list) {
+    const id = String(Date.now()), str = JSON.stringify(list), n = Math.max(1, Math.ceil(str.length / CH));
+    for (let i = 0; i < n; i++) await db.collection("backups/" + id + "/chunks").doc(String(i)).set({ d: str.slice(i * CH, (i + 1) * CH) });
+    await db.collection("backups").doc(id).set({ t: +id, count: list.length, n });
+    const all = await backupList();
+    for (const b of all.slice(KEEP)) {
+      for (let i = 0; i < b.n; i++) await db.collection("backups/" + b.id + "/chunks").doc(String(i)).delete();
+      await db.collection("backups").doc(b.id).delete();
+    }
+    return backupList();
+  }
+  async function backupList() {
+    const q = await db.collection("backups").get(), out = [];
+    q.forEach(d => { const v = d.data(); out.push({ id: String(v.t), t: v.t, count: v.count, n: v.n }); });
+    return out.sort((a, b) => b.t - a.t);
+  }
+  async function backupLoad(b) {
+    let str = "";
+    for (let i = 0; i < b.n; i++) str += (await db.collection("backups/" + b.id + "/chunks").doc(String(i)).get()).data().d;
+    return JSON.parse(str);
+  }
   const logout = () => (auth ? auth.signOut() : Promise.resolve());
   function msg(e) {
     const c = (e && e.code) || "";
@@ -76,5 +99,5 @@ window.Cloud = (() => {
     if (c === "auth/too-many-requests") return "Too many attempts. Try again later.";
     return "Something went wrong" + (c ? " (" + c + ")" : "") + ".";
   }
-  return { enabled, start, session, studentLogin, register, adminLogin, save, remove, resetClaim, changePassword, logout, msg, loadAll };
+  return { enabled, start, session, studentLogin, register, adminLogin, save, remove, resetClaim, changePassword, logout, msg, loadAll, backupCreate, backupList, backupLoad };
 })();
