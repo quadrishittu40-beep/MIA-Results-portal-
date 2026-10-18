@@ -29,3 +29,9 @@ Home (portal links) → Student Sign In / Register / Reset password → dashboar
 
 ## Shared online mode
 Without setup the site runs per-device (see limits above). Follow **FIREBASE_SETUP.md** to turn on shared mode: student self-registration, login on any device, and admin results that appear for students immediately.
+
+## Backups
+Admin page → **Download backup** saves all students and results as a JSON file (do this weekly; the page warns after 7 days). **Restore from backup file** puts them back. The portal also keeps the last 5 automatic snapshots in the admin's browser (taken before every save, delete or restore) under **Restore this snapshot**. Snapshots live only in that browser, so the downloaded file is your real backup.
+
+## Online backup
+In shared (Firebase) mode the admin page has **Back up now**, daily automatic backups, and **Restore this online backup** (newest 10 kept). Requires the updated `firestore.rules`.

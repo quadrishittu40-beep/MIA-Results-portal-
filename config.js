@@ -4,7 +4,7 @@ window.PORTAL_CONFIG = {
   motto: "Know Me Before You Worship Me",
   est: "EST. 2024",
   // Client-side passcode for the admin page. NOT real security - see README.
-  adminPasscode: "change-me",
+  adminPasscode: "9862",
   // ---- Shared online mode (optional). Leave apiKey empty to run without a backend. See FIREBASE_SETUP.md ----
   firebase: { apiKey: "", authDomain: "", projectId: "", appId: "" },
   adminEmail: "",           // the admin's Firebase login email

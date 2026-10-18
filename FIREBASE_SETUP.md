@@ -20,3 +20,7 @@ Done. Open the site: **Admin Portal → Login** with the admin email/password, a
 - Forgotten password: delete that student's login in Firebase **Authentication → Users** (their email looks like `mia-2024-001@mia-portal.app`), tap **Reset registration** in Admin, and the student registers again.
 
 The Firebase web keys in config.js are meant to be public; the security comes from the rules in step 5.
+
+## Online backup (already in the updated rules)
+Admin page → **Online backup**: **Back up now** saves all students and results inside your Firebase project, and a backup is also made automatically once a day when you open the admin page. The newest 10 are kept; pick one and tap **Restore this online backup** to roll back. If backups say "unavailable", re-paste the latest `firestore.rules` (it now has a `backups` section) and tap Publish.
+Tip: online backups live in the same Firebase project, so still tap **Download backup** now and then to keep a copy outside it.

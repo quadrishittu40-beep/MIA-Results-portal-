@@ -14,6 +14,9 @@ service cloud.firestore {
       allow create: if isAdmin() || (claimed(k) && request.resource.data.sessions.size() == 0);
       allow update, delete: if isAdmin();
     }
+    match /backups/{path=**} {
+      allow read, write: if isAdmin();
+    }
     match /claims/{k} {
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid
