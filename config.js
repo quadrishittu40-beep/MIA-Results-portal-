@@ -6,8 +6,13 @@ window.PORTAL_CONFIG = {
   // Client-side passcode for the admin page. NOT real security - see README.
   adminPasscode: "9862",
   // ---- Shared online mode (optional). Leave apiKey empty to run without a backend. See FIREBASE_SETUP.md ----
-  firebase: { apiKey: "", authDomain: "", projectId: "", appId: "" },
-  adminEmail: "",           // the admin's Firebase login email
+  firebase: {
+    apiKey: "AIzaSyCqAvzVguG5O6i69tpa9gsi9JNe04KkvN4",
+    authDomain: "result-portal-2c2fc.firebaseapp.com",
+    projectId: "result-portal-2c2fc",
+    appId: "1:148785217048:web:afdbbe63481e6431998d6d"
+  },
+  adminEmail: "maknazulirfan@gmail.com",           // the admin's Firebase login email
   defaults: { programme: "ISLAMIC STUDIES", department: "DEPARTMENT OF ISLAMIC STUDIES", faculty: "ARABIC & ISLAMIC SCIENCES", entryMode: "UME" },
   totalSemesters: 8,        // semesters needed to graduate
   requiredUnits: 120,       // total units passed required to graduate
