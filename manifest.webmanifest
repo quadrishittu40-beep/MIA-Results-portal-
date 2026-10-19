@@ -1,0 +1,19 @@
+{
+  "name": "Maknazul 'Irfan Academy Result Portal",
+  "short_name": "MIA Results",
+  "description": "Student results and academic profile for Maknazul 'Irfan Academy",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d3b82",
+  "theme_color": "#0d3b82",
+  "icons": [
+    {
+      "src": "assets/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
