@@ -66,3 +66,19 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid 
 
 .note.warn{background:#fff4d6;color:#7a5200;border:1px solid #f0d28a}.list b{display:block;margin:10px 0 6px;color:var(--navy)}.list select{width:100%;margin-bottom:6px}
 #install{background:#fff;color:#0d3b82;margin-left:8px}
+
+/* ---- welcome splash ---- */
+#splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 30%,#1e64c8,#0d3b82 60%,#08275a);color:#fff;text-align:center;transition:opacity .45s ease,transform .45s ease}
+#splash.sp-out{opacity:0;transform:scale(1.04);pointer-events:none}
+.sp-card{max-width:420px;width:100%;animation:spIn .8s ease both}
+.sp-card img{width:132px;height:132px;border-radius:50%;background:#fff;padding:6px;box-shadow:0 10px 40px #0006;animation:spPop 1s ease both}
+.sp-small{margin:22px 0 4px;letter-spacing:.2em;text-transform:uppercase;font-size:13px;opacity:.85}
+.sp-card h1{margin:0;font-size:clamp(24px,7vw,34px);line-height:1.2;letter-spacing:.02em}
+.sp-sub{margin:8px 0 0;font-size:16px;opacity:.9}
+.sp-motto{margin:18px 0 26px;font-style:italic;opacity:.8}
+#spgo{background:#fff;color:#0d3b82;padding:11px 34px;font-size:16px}
+.sp-bar{height:3px;background:#fff3;border-radius:3px;margin:26px auto 0;max-width:200px;overflow:hidden}.sp-bar i{display:block;height:100%;background:#fff;animation:spBar 3.8s linear both}
+@keyframes spIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes spPop{from{transform:scale(.6);opacity:0}60%{transform:scale(1.06)}to{transform:scale(1);opacity:1}}
+@keyframes spBar{from{width:0}to{width:100%}}
+@media (prefers-reduced-motion:reduce){.sp-card,.sp-card img,.sp-bar i{animation:none}.sp-bar i{width:100%}}
